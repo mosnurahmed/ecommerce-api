@@ -1,18 +1,26 @@
-// src/lib/auth/auth.config.ts
-// NextAuth setup with credentials
+// src/lib/auth.ts
+// Replace ENTIRE file:
 
-import { NextAuthConfig } from 'next-auth'
+import { NextAuthOptions } from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
 
-export const authConfig: NextAuthConfig = {
+export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
       name: 'Credentials',
       credentials: {
-        email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'password' },
+        email: { 
+          label: 'Email', 
+          type: 'email',
+          placeholder: 'your@email.com'
+        },
+        password: { 
+          label: 'Password', 
+          type: 'password',
+          placeholder: '••••••••'
+        },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
@@ -20,7 +28,7 @@ export const authConfig: NextAuthConfig = {
         }
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
+          where: { email: credentials.email },
         })
 
         if (!user) {
@@ -28,7 +36,7 @@ export const authConfig: NextAuthConfig = {
         }
 
         const isValidPassword = await bcrypt.compare(
-          credentials.password as string,
+          credentials.password,
           user.password
         )
 
@@ -45,26 +53,37 @@ export const authConfig: NextAuthConfig = {
       },
     }),
   ],
+  
   callbacks: {
     async jwt({ token, user }) {
+      // Initial sign in
       if (user) {
         token.id = user.id
         token.role = user.role
       }
       return token
     },
+    
     async session({ session, token }) {
+      // Add custom fields to session
+      // Fix: Don't call token.id as function, it's a property!
       if (session.user) {
+        // ❌ Wrong: session.user.id = token.id()
+        // ✅ Correct: session.user.id = token.id
         session.user.id = token.id as string
         session.user.role = token.role as string
       }
       return session
     },
   },
+  
   pages: {
     signIn: '/login',
   },
+  
   session: {
     strategy: 'jwt',
   },
+  
+  secret: process.env.NEXTAUTH_SECRET,
 }
